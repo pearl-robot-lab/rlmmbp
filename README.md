@@ -4,7 +4,7 @@ Based on the research paper: **Robot Learning of Mobile Manipulation With Reacha
 
 <p float="left">
   <img src="https://irosalab853468903.files.wordpress.com/2022/02/1mreach.gif?w=543" width="400" />
-  <img src="https://irosalab853468903.files.wordpress.com/2022/02/3obsreach.gif?w=543" width="400" /> 
+  <img src="https://irosalab853468903.files.wordpress.com/2022/02/tablemultiobj.gif?w=543" width="400" /> 
 </p>
 
 This code is meant for learning mobile manipulation behaviors through Reinforcement Learning (RL). Specifically, the RL agent learns where to place the mobile manipulator robot and whether to activate the arm of the robot for reaching/grasping at a 6D end-effector target pose.
