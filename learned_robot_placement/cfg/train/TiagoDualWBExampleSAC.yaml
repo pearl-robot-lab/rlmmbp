@@ -1,0 +1,34 @@
+name: TiagoDualWBExampleSAC
+
+params:
+  seed: ${...seed}
+
+  algo:
+    name: SAC # Has to match class name if using mushroom RL library
+
+  load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
+  load_path: ${...checkpoint} # path to the checkpoint to load
+
+  config:
+    name: ${resolve_default:${....train.name},${....experiment}}
+    device: ${....rl_device}
+    device_name: ${....rl_device}
+    num_actors: ${....task.env.numEnvs}
+    log_checkpoints: True
+    
+    # network:
+    n_features: 256 # Default is two layer FCN
+    lr_actor_net: 0.0001
+    lr_critic_net: 0.0001
+    batch_size: 256
+    # algo:
+    initial_replay_size: 10000
+    max_replay_size: 500000
+    warmup_transitions: 10000
+    tau: 0.005
+    lr_alpha: 0.0003
+    # target_entropy: # automatic as per action space
+    # runner:
+    n_epochs: 200
+    n_steps: 12000 # training
+    n_steps_test: 4000
