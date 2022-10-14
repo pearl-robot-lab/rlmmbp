@@ -2,6 +2,8 @@
 
 Based on the research paper: **Robot Learning of Mobile Manipulation With Reachability Behavior Priors** [1] [[Paper](https://arxiv.org/abs/2203.04051)] [[Project site](https://irosalab.com/rlmmbp/)]
 
+![Tiago++](https://irosalab853468903.files.wordpress.com/2022/02/1mreach.gif?w=543)![Tiago++](https://irosalab853468903.files.wordpress.com/2022/02/3obsreach.gif?w=543)
+
 This code is meant for learning mobile manipulation behaviors through Reinforcement Learning (RL). Specifically, the RL agent learns where to place the mobile manipulator robot and whether to activate the arm of the robot for reaching/grasping at a 6D end-effector target pose.
 
 The repository contains RL environments for the Tiago++ mobile manipulator robot and uses the NVIDIA Isaac Sim simulator (Adapted from OmniIsaacGymEnvs [2]). It also uses the proposed algorithm **Boosted Hybrid Reinforcement Learning (BHyRL)** [1] (https://github.com/iROSA-lab/mushroom-rl/blob/dev/mushroom_rl/algorithms/actor_critic/deep_actor_critic/bhyrl.py)
