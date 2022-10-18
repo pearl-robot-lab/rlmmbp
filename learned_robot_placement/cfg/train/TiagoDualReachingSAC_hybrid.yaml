@@ -1,0 +1,35 @@
+name: TiagoDualWBExampleSAC_hybrid
+
+params:
+  seed: ${...seed}
+
+  algo:
+    name: SAC_hybrid # Has to match class name if using mushroom RL library
+
+  load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
+  load_path: ${...checkpoint} # path to the checkpoint to load
+
+  config:
+    name: ${resolve_default:${....train.name},${....experiment}}
+    device: ${....rl_device}
+    device_name: ${....rl_device}
+    num_actors: ${....task.env.numEnvs}
+    log_checkpoints: True
+    
+    # network:
+    n_features: 128 # Default is two layer FCN
+    lr_actor_net: 0.0003
+    lr_critic_net: 0.0003
+    batch_size: 128
+    # algo:
+    initial_replay_size: 1024
+    max_replay_size: 75000
+    warmup_transitions: 1024
+    tau: 0.005
+    lr_alpha: 0.0003
+    temperature: 1.0 # For the softmax of gumbel
+    # target_entropy: # automatic as per action space
+    # runner:
+    n_epochs: 250
+    n_steps: 400 # training
+    n_steps_test: 80

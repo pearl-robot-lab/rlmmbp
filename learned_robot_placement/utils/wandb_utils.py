@@ -7,7 +7,7 @@ class wandbLogger:
             mode="disabled"
         else:
             mode=None
-        wandb.init(project="lwbm", entity="irosa-ias", group=group_name, id=run_name, config=exp_config,
+        wandb.init(project="xyz", entity="irosa-ias", group=group_name, id=run_name, config=exp_config,
                 reinit=True, resume="allow", settings=wandb.Settings(start_method="fork"), mode=mode)
 
     def run_log_wandb(self,success_rate, J, R, E, avg_episode_length, q_loss):
@@ -17,6 +17,5 @@ class wandbLogger:
     def vid_log_wandb(self,img_dataset):
         np_video = np.expand_dims(np.moveaxis(img_dataset[0][0],-1,0), axis=0)
         for tup in img_dataset:
-            np_video = np.vstack((np_video, np.expand_dims(np.moveaxis(tup[0],-1,0), axis=0)))
-        # import pdb; pdb.set_trace()
+            np_video = np.vstack((np_video, np.expand_dims(np.moveaxis(tup[0],-1,0), axis=0)))        
         wandb.log({"video": wandb.Video(np_video, fps=60, format="gif")})

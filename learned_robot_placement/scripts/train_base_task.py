@@ -29,7 +29,6 @@
 import os
 from datetime import datetime
 import argparse
-from experiment_launcher import run_experiment
 
 import numpy as np
 import hydra
@@ -53,8 +52,8 @@ from mushroom_rl.utils.dataset import compute_J, parse_dataset
 from tqdm import trange
 
 # (Optional) Logging with Weights & biases
-from learned_robot_placement.utils.wandb_utils import wandbLogger
-import wandb
+# from learned_robot_placement.utils.wandb_utils import wandbLogger
+# import wandb
 
 
 class CriticNetwork(nn.Module):
@@ -131,9 +130,9 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
     render = cfg.render
     sim_app_cfg_path = cfg.sim_app_cfg_path
     rl_params_cfg = cfg.train.params.config
-    algo_map = {"SAC": SAC,    # Mappings from strings to algorithms
-                "AWAC":AWAC,
-                "TD3": TD3,}
+    algo_map = {"SAC_hybrid": SAC_hybrid,    # Mappings from strings to algorithms
+                "SAC":SAC,
+                "BHyRL":BHyRL,}
     algo = algo_map[cfg.train.params.algo.name]
 
     # Set up environment
@@ -180,25 +179,33 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
         # Approximators
         use_cuda = ('cuda' in cfg.rl_device)
         actor_input_shape = env.info.observation_space.shape
+        # Need to set these for hybrid action space!
+        action_space_continous = (cfg.task.env.continous_actions,)
+        action_space_discrete = (cfg.task.env.discrete_actions,)
         actor_mu_params = dict(network=ActorNetwork,
-                            n_features=rl_params_cfg.n_features,
+                            n_features=n_features,
                             input_shape=actor_input_shape,
-                            output_shape=env.info.action_space.shape,
+                            output_shape=action_space_continous,
                             use_cuda=use_cuda)
         actor_sigma_params = dict(network=ActorNetwork,
-                                n_features=rl_params_cfg.n_features,
+                                n_features=n_features,
                                 input_shape=actor_input_shape,
-                                output_shape=env.info.action_space.shape,
+                                output_shape=action_space_continous,
+                                use_cuda=use_cuda)
+        actor_discrete_params = dict(network=ActorNetwork,
+                                n_features=n_features,
+                                input_shape=actor_discrete_input_shape,
+                                output_shape=action_space_discrete,
                                 use_cuda=use_cuda)
         actor_optimizer = {'class': optim.Adam,
-                        'params': {'lr': rl_params_cfg.lr_actor_net}}
+                        'params': {'lr': lr_actor_net}}
 
-        critic_input_shape = (actor_input_shape[0] + env.info.action_space.shape[0],)
+        critic_input_shape = (actor_input_shape[0] + mdp.info.action_space.shape[0],)# full action space
         critic_params = dict(network=CriticNetwork,
                             optimizer={'class': optim.Adam,
-                                        'params': {'lr': rl_params_cfg.lr_critic_net}},
+                                        'params': {'lr': lr_critic_net}},
                             loss=F.mse_loss,
-                            n_features=rl_params_cfg.n_features,
+                            n_features=n_features,
                             input_shape=critic_input_shape,
                             output_shape=(1,),
                             use_cuda=use_cuda)
@@ -212,7 +219,7 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
             logger.strong_line()
             logger.info(f'Experiment: {exp_name}, Trial: {exp}')
             exp_eval_dataset = list() # This will be a list of dicts with datasets from every epoch
-            wandb_logger = wandbLogger(exp_config=cfg, run_name=logger._log_id, group_name=exp_name+'_'+exp_stamp)
+            # wandb_logger = wandbLogger(exp_config=cfg, run_name=logger._log_id, group_name=exp_name+'_'+exp_stamp) # Optional
             
             # Agent
             agent = algo(env.info, actor_mu_params, actor_sigma_params, actor_optimizer, critic_params,
@@ -232,9 +239,10 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
             success_rate = np.sum(info)/np.sum(last) # info contains successes. rate=num_successes/num_episodes
             avg_episode_length = rl_params_cfg.n_steps_test/np.sum(last)
             logger.epoch_info(0, success_rate=success_rate, J=J, R=R, entropy=E, avg_episode_length=avg_episode_length)
-            wandb.watch(agent.policy._mu_approximator.model.network)
-            wandb.watch(agent.policy._sigma_approximator.model.network)
-            wandb.watch(agent._critic_approximator.model._model[0].network)
+            # Optional wandb logging
+            # wandb.watch(agent.policy._mu_approximator.model.network)
+            # wandb.watch(agent.policy._sigma_approximator.model.network)
+            # wandb.watch(agent._critic_approximator.model._model[0].network)
             exp_eval_dataset.append({"Epoch": 0, "success_rate": success_rate, "J": J, "R": R, "entropy": E, "avg_episode_length": avg_episode_length})
             # initialize replay buffer
             core.learn(n_steps=rl_params_cfg.initial_replay_size, n_steps_per_fit=rl_params_cfg.initial_replay_size, render=cfg.render)
@@ -260,19 +268,18 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
                 current_log={"success_rate": success_rate, "J": J, "R": R, "entropy": E, 
                              "avg_episode_length": avg_episode_length, "q_loss": q_loss, "actor_loss": actor_loss}
                 exp_eval_dataset.append(current_log)
-                wandb_logger.run_log_wandb(success_rate, J, R, E, avg_episode_length, q_loss)
+                # wandb_logger.run_log_wandb(success_rate, J, R, E, avg_episode_length, q_loss)
 
-        
             # Get video snippet of final learnt behavior (enable internal rendering for this)
-            prev_env_render_setting = bool(env._run_sim_rendering)
-            env._run_sim_rendering = True
-            img_dataset = core.evaluate(n_episodes=5, get_renders=True)
-            env._run_sim_rendering = prev_env_render_setting
+            # prev_env_render_setting = bool(env._run_sim_rendering)
+            # env._run_sim_rendering = True
+            # img_dataset = core.evaluate(n_episodes=5, get_renders=True)
+            # env._run_sim_rendering = prev_env_render_setting
             # log dataset and video
-            logger.log_dataset(exp_eval_dataset)
+            # logger.log_dataset(exp_eval_dataset)
             # run_log_wandb(exp_config=cfg, run_name=logger._log_id, group_name=exp_name+'_'+exp_stamp, dataset=exp_eval_dataset)
-            img_dataset = img_dataset[::15] # Reduce size of img_dataset. Take every 15th image
-            wandb_logger.vid_log_wandb(img_dataset=img_dataset)
+            # img_dataset = img_dataset[::15] # Reduce size of img_dataset. Take every 15th image
+            # wandb_logger.vid_log_wandb(img_dataset=img_dataset)
 
     # Shutdown
     env._simulation_app.close()
@@ -280,25 +287,8 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
 
 @hydra.main(config_name="config", config_path="../cfg")
 def parse_hydra_configs_and_run_exp(cfg: DictConfig):
-
     experiment(cfg)
 
 
 if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser("Train/Test agent: (Local or SLURM)")
-    parser.add_argument("--cfg_file_path", type=str, default="", help="Optional config file to run experiment (typically when using slurm)")
-    args, _ = parser.parse_known_args()
-    
-    if args.cfg_file_path:
-        # Leave below unchanged for slurm 'experiment_launcher'
-        # (https://git.ias.informatik.tu-darmstadt.de/common/experiment_launcher/)
-        parser.add_argument('--joblib_n_jobs', type=int)
-        parser.add_argument('--joblib_n_seeds', type=int)
-        parser.add_argument('--seed', type=int)
-        parser.add_argument('--results_dir', type=str)
-        args = parser.parse_args()
-        
-        run_experiment(experiment, vars(args))
-    else:
-        parse_hydra_configs_and_run_exp()
+    parse_hydra_configs_and_run_exp()
