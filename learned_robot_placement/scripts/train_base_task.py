@@ -182,30 +182,32 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
         # Need to set these for hybrid action space!
         action_space_continous = (cfg.task.env.continous_actions,)
         action_space_discrete = (cfg.task.env.discrete_actions,)
+        # Discrete approximator takes state and continuous action as input
+        actor_discrete_input_shape = (env.info.observation_space.shape[0]+action_space_continous[0],)
         actor_mu_params = dict(network=ActorNetwork,
-                            n_features=n_features,
+                            n_features=rl_params_cfg.n_features,
                             input_shape=actor_input_shape,
                             output_shape=action_space_continous,
                             use_cuda=use_cuda)
         actor_sigma_params = dict(network=ActorNetwork,
-                                n_features=n_features,
+                                n_features=rl_params_cfg.n_features,
                                 input_shape=actor_input_shape,
                                 output_shape=action_space_continous,
                                 use_cuda=use_cuda)
         actor_discrete_params = dict(network=ActorNetwork,
-                                n_features=n_features,
+                                n_features=rl_params_cfg.n_features,
                                 input_shape=actor_discrete_input_shape,
                                 output_shape=action_space_discrete,
                                 use_cuda=use_cuda)
         actor_optimizer = {'class': optim.Adam,
-                        'params': {'lr': lr_actor_net}}
+                        'params': {'lr': rl_params_cfg.lr_actor_net}}
 
-        critic_input_shape = (actor_input_shape[0] + mdp.info.action_space.shape[0],)# full action space
+        critic_input_shape = (actor_input_shape[0] + env.info.action_space.shape[0],) # full action space
         critic_params = dict(network=CriticNetwork,
                             optimizer={'class': optim.Adam,
-                                        'params': {'lr': lr_critic_net}},
+                                        'params': {'lr': rl_params_cfg.lr_critic_net}},
                             loss=F.mse_loss,
-                            n_features=n_features,
+                            n_features=rl_params_cfg.n_features,
                             input_shape=critic_input_shape,
                             output_shape=(1,),
                             use_cuda=use_cuda)
@@ -222,10 +224,10 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
             # wandb_logger = wandbLogger(exp_config=cfg, run_name=logger._log_id, group_name=exp_name+'_'+exp_stamp) # Optional
             
             # Agent
-            agent = algo(env.info, actor_mu_params, actor_sigma_params, actor_optimizer, critic_params,
+            agent = algo(env.info, actor_mu_params, actor_sigma_params, actor_discrete_params, actor_optimizer, critic_params,
                         batch_size=rl_params_cfg.batch_size, initial_replay_size=rl_params_cfg.initial_replay_size,
                         max_replay_size=rl_params_cfg.max_replay_size, warmup_transitions=rl_params_cfg.warmup_transitions,
-                        tau=rl_params_cfg.tau, lr_alpha=rl_params_cfg.lr_alpha, target_entropy=rl_params_cfg.target_entropy)
+                        tau=rl_params_cfg.tau, lr_alpha=rl_params_cfg.lr_alpha)
 
             # Algorithm
             core = Core(agent, env)
