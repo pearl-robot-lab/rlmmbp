@@ -259,6 +259,8 @@ class TiagoDualReachingTask(RLTask):
     def is_done(self) -> None:
         # resets = torch.where(torch.abs(cart_pos) > self._reset_dist, 1, 0)
         # resets = torch.where(torch.abs(pole_pos) > np.pi / 2, 1, resets)
-        resets = torch.zeros(self._num_envs, dtype=int, device=self._device)
-        resets = torch.where(self.progress_buf >= self._max_episode_length, 1, resets)
+        # resets = torch.zeros(self._num_envs, dtype=int, device=self._device)
+        
+        # reset if success OR if reached max episode length
+        resets = torch.where(self.progress_buf >= self._max_episode_length, 1, self._is_success)
         self.reset_buf[:] = resets
