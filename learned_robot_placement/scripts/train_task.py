@@ -227,7 +227,13 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
             agent = algo(env.info, actor_mu_params, actor_sigma_params, actor_discrete_params, actor_optimizer, critic_params,
                         batch_size=rl_params_cfg.batch_size, initial_replay_size=rl_params_cfg.initial_replay_size,
                         max_replay_size=rl_params_cfg.max_replay_size, warmup_transitions=rl_params_cfg.warmup_transitions,
-                        tau=rl_params_cfg.tau, lr_alpha=rl_params_cfg.lr_alpha)
+                        tau=rl_params_cfg.tau, lr_alpha=rl_params_cfg.lr_alpha, temperature=rl_params_cfg.temperature)
+
+            # Setup boosting (for BHyRL):
+            if rl_params_cfg.prior_agent is not None:
+                prior_agents = list()
+                prior_agents.append(algo.load(rl_params_cfg.prior_agent))
+                agent.setup_boosting(prior_agents=prior_agents, use_kl_on_pi=rl_params_cfg.use_kl_on_pi, kl_on_pi_alpha=rl_params_cfg.kl_on_pi_alpha)
 
             # Algorithm
             core = Core(agent, env)
