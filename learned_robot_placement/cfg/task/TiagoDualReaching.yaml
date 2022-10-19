@@ -14,6 +14,7 @@ env:
   horizon: 10
   # Move group to be used
   move_group: "arm_left" # String. Can be arm_left or arm_right
+  use_torso: True # Use torso joint too
   randomize_robot_on_reset: False
   # Hybrid action space
   continous_actions: 3 # SE2 base pose

@@ -10,9 +10,10 @@ from omni.isaac.core.utils.stage import get_current_stage
 
 # Whole Body robot handler for the dual-armed Tiago robot
 class TiagoDualWBHandler(TiagoBaseHandler):
-    def __init__(self, move_group, sim_config, num_envs, device):
+    def __init__(self, move_group, use_torso, sim_config, num_envs, device):
         # self.task = task_class
         self._move_group = move_group
+        self._use_torso = use_torso
         self._sim_config = sim_config
         self._num_envs = num_envs
         self._robot_positions = torch.tensor([0, 0, 0]) # placement of the robot in the world
@@ -46,13 +47,13 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         self._base_joint_names = ["X",
                                   "Y",
                                   "R"]
+        self._torso_joint_name = ["torso_lift_joint"]
         self._arm_left_names = []
         self._arm_right_names = []
         for i in range(7):
             self._arm_left_names.append(f"arm_left_{i+1}_joint")
             self._arm_right_names.append(f"arm_right_{i+1}_joint")
-            
-        self._torso_joint_name = ["torso_lift_joint"]
+        
         # Future: Use end-effector link names and get their poses and velocities from Isaac
         self.ee_left_prim =  ["gripper_left_grasping_frame"]
         self.ee_right_prim = ["gripper_right_grasping_frame"]
@@ -67,13 +68,15 @@ class TiagoDualWBHandler(TiagoBaseHandler):
 
         # values are set in post_reset after model is loaded        
         self.base_dof_idxs = []
+        self.torso_dof_idx = []
         self.arm_left_dof_idxs = []
         self.arm_right_dof_idxs = []
         self.upper_body_dof_idxs = []
         self.combined_dof_idxs = []
-        self.torso_dof_idx = []
 
         # dof joint position limits
+        self.torso_dof_lower = []
+        self.torso_dof_upper = []        
         self.arm_left_dof_lower = []
         self.arm_left_dof_upper = []
         self.arm_right_dof_lower = []
@@ -105,15 +108,19 @@ class TiagoDualWBHandler(TiagoBaseHandler):
 
     def _set_dof_idxs(self):
         [self.base_dof_idxs.append(self.robots.get_dof_index(name)) for name in self._base_joint_names]
+        [self.torso_dof_idx.append(self.robots.get_dof_index(name)) for name in self._torso_joint_name]
         [self.arm_left_dof_idxs.append(self.robots.get_dof_index(name)) for name in self._arm_left_names]
         [self.arm_right_dof_idxs.append(self.robots.get_dof_index(name)) for name in self._arm_right_names]
-        [self.torso_dof_idx.append(self.robots.get_dof_index(name)) for name in self._torso_joint_name]        
+        self.upper_body_dof_idxs = []
+        if self._use_torso:
+            self.upper_body_dof_idxs += self.torso_dof_idx
+        
         if self._move_group == "arm_left":
-            self.upper_body_dof_idxs=self.arm_left_dof_idxs
+            self.upper_body_dof_idxs += self.arm_left_dof_idxs
         elif self._move_group == "arm_right":
-            self.upper_body_dof_idxs=self.arm_right_dof_idxs
+            self.upper_body_dof_idxs += self.arm_right_dof_idxs
         elif self._move_group == "both_arms":
-            self.upper_body_dof_idxs=self.arm_left_dof_idxs + self.arm_right_dof_idxs
+            self.upper_body_dof_idxs += self.arm_left_dof_idxs + self.arm_right_dof_idxs
         else:
             raise ValueError('move_group not defined')
         # Future: Add end-effector prim paths
@@ -126,6 +133,8 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         dof_limits_upper = dof_limits[0, :, 1].to(self._device)
 
         # set relevant joint position limit values
+        self.torso_dof_lower = dof_limits_upper[self.torso_dof_idx]
+        self.torso_dof_upper = dof_limits_upper[self.torso_dof_idx]
         self.arm_left_dof_lower = dof_limits_lower[self.arm_left_dof_idxs]
         self.arm_left_dof_upper = dof_limits_upper[self.arm_left_dof_idxs]
         self.arm_right_dof_lower = dof_limits_lower[self.arm_right_dof_idxs]
@@ -137,9 +146,9 @@ class TiagoDualWBHandler(TiagoBaseHandler):
     def _set_default_state(self):
         joint_states = self.robots.get_joints_default_state()
         jt_pos = joint_states.positions
+        jt_pos[:, self.torso_dof_idx] = self.torso_fixed_state
         jt_pos[:, self.arm_left_dof_idxs] = self.arm_left_start
         jt_pos[:, self.arm_right_dof_idxs] = self.arm_right_start
-        jt_pos[:, self.torso_dof_idx] = self.torso_fixed_state
         self.robots.set_joints_default_state(positions=jt_pos)
     
     def apply_actions(self, actions):
@@ -156,9 +165,10 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         # self.robots.set_joint_position_targets(positions=jt_pos, joint_indices=self.upper_body_dof_idxs)
         # TEMP: Use direct joint positions
         self.robots.set_joint_positions(positions=jt_pos, joint_indices=self.upper_body_dof_idxs)
-        # Hack to avoid torso falling when it isn't controlled
-        pos = self.torso_fixed_state.unsqueeze(dim=0)
-        self.robots.set_joint_positions(positions=pos, joint_indices=self.torso_dof_idx)
+        if not self._use_torso:
+            # Hack to avoid torso falling when it isn't controlled
+            pos = self.torso_fixed_state.unsqueeze(dim=0)
+            self.robots.set_joint_positions(positions=pos, joint_indices=self.torso_dof_idx)
         if self._move_group == "arm_left": # Hack to avoid arm falling when it isn't controlled
             pos = self.arm_right_start.unsqueeze(dim=0)
             self.robots.set_joint_positions(positions=pos, joint_indices=self.arm_right_dof_idxs)
@@ -175,26 +185,22 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         jt_pos = self.robots.get_joint_positions(joint_indices=self.base_dof_idxs, clone=True)
         jt_pos += base_actions*self.dt # create new position targets
         self.robots.set_joint_positions(positions=jt_pos, joint_indices=self.base_dof_idxs)
-
-
-
-        # pos = self.arm_left_start.unsqueeze(dim=0)
-        # self.robots.set_joint_positions(positions=pos, joint_indices=self.arm_left_dof_idxs)
-
+        
     def set_upper_body_positions(self, jnt_positions):
         # Set upper body joints to specific positions
         self.robots.set_joint_positions(positions=jnt_positions, joint_indices=self.upper_body_dof_idxs)
-        # Hack to avoid torso falling when it isn't controlled
-        pos = self.torso_fixed_state.unsqueeze(dim=0)
-        self.robots.set_joint_positions(positions=pos, joint_indices=self.torso_dof_idx)
-        if self._move_group == "arm_left": # Hack to avoid arm falling when it isn't controlled
-            pos = self.arm_right_start.unsqueeze(dim=0)
-            self.robots.set_joint_positions(positions=pos, joint_indices=self.arm_right_dof_idxs)
-        elif self._move_group == "arm_right": # Hack to avoid arm falling when it isn't controlled
-            pos = self.arm_left_start.unsqueeze(dim=0)
-            self.robots.set_joint_positions(positions=pos, joint_indices=self.arm_left_dof_idxs)
-        elif self._move_group == "both_arms":
-            pass
+        # if not self._use_torso:
+        #     # Hack to avoid torso falling when it isn't controlled
+        #     pos = self.torso_fixed_state.unsqueeze(dim=0)
+        #     self.robots.set_joint_positions(positions=pos, joint_indices=self.torso_dof_idx)
+        # if self._move_group == "arm_left": # Hack to avoid arm falling when it isn't controlled
+        #     pos = self.arm_right_start.unsqueeze(dim=0)
+        #     self.robots.set_joint_positions(positions=pos, joint_indices=self.arm_right_dof_idxs)
+        # elif self._move_group == "arm_right": # Hack to avoid arm falling when it isn't controlled
+        #     pos = self.arm_left_start.unsqueeze(dim=0)
+        #     self.robots.set_joint_positions(positions=pos, joint_indices=self.arm_left_dof_idxs)
+        # elif self._move_group == "both_arms":
+        #     pass
 
     def set_base_positions(self, jnt_positions):
         # Set base joints to specific positions
@@ -210,7 +216,7 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         combined_pos[limits,2] += 2*torch.pi
         # NOTE: Velocities here will only be correct if the correct control mode is used!!
         combined_vel = self.robots.get_joint_velocities(joint_indices=self.combined_dof_idxs, clone=True)
-        # Future: Add pose and velocity of end-effector from Isaac prims        
+        # Future: Add pose and velocity of end-effector from Isaac prims
         return torch.hstack((combined_pos,combined_vel))
 
     def get_arms_dof_pos(self):
@@ -235,6 +241,11 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         base_pos = self.robots.get_joint_positions(joint_indices=self.base_dof_idxs, clone=False)
         base_vel = self.robots.get_joint_velocities(joint_indices=self.base_dof_idxs, clone=False)
         return base_pos, base_vel
+
+    def get_torso_dof_values(self):
+        torso_pos = self.robots.get_joint_positions(joint_indices=self.torso_dof_idx, clone=False)
+        torso_vel = self.robots.get_joint_velocities(joint_indices=self.torso_dof_idx, clone=False)
+        return torso_pos, torso_vel
 
     def reset(self, indices, randomize=False):
         num_resets = len(indices)

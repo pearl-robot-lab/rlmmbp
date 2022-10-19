@@ -67,6 +67,7 @@ class TiagoDualReachingTask(RLTask):
         # 6D goal pose only (3 pos + 4 quat = 7)
         self._num_observations = 7
         self._move_group = self._task_cfg["env"]["move_group"]
+        self._use_torso = self._task_cfg["env"]["use_torso"]
         # Position control. Actions are base SE2 pose (3) and discrete arm activation (2)
         self._num_actions = self._task_cfg["env"]["continous_actions"] + self._task_cfg["env"]["discrete_actions"]
         # env specific limits
@@ -90,7 +91,7 @@ class TiagoDualReachingTask(RLTask):
         self._goal_tf[:3,:3] = torch.tensor(Rotation.from_quat(np.array([self._goals[0,3+1],self._goals[0,3+2],self._goals[0,3+3],self._goals[0,3]])).as_matrix(),dtype=float,device=self._device) # Quaternion in scalar last format!!!
         self._goal_tf[:,-1] = torch.tensor([self._goals[0,0], self._goals[0,1], self._goals[0,2], 1.0],device=self._device) # x,y,z,1
         self._curr_goal_tf = self._goal_tf.clone()
-        self._goals_xy_dist = torch.linalg.norm(self._goals[:,0:2])  # distance from origin
+        self._goals_xy_dist = torch.linalg.norm(self._goals[:,0:2],dim=1)  # distance from origin
         self._goal_pos_threshold = self._task_cfg["env"]["goal_pos_thresh"]
         self._goal_ang_threshold = self._task_cfg["env"]["goal_ang_thresh"]
 
@@ -100,14 +101,16 @@ class TiagoDualReachingTask(RLTask):
         self._reward_noIK = self._task_cfg["env"]["reward_noIK"]
         # self._reward_timeout = self._task_cfg["env"]["reward_timeout"]
         # self._reward_collision = self._task_cfg["env"]["reward_collision"]
+        self._ik_fails = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
+        self._is_success = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
 
         # Get dt for integrating velocity commands and checking limit violations
         self._dt = torch.tensor(self._sim_config.task_config["sim"]["dt"]*self._sim_config.task_config["env"]["controlFrequencyInv"],device=self._device)
 
         # IK solver
-        self._ik_solver = PinTiagoIKSolver(move_group=self._move_group)
+        self._ik_solver = PinTiagoIKSolver(move_group=self._move_group, include_torso=self._use_torso, include_base=False, max_rot_vel=100.0) # No max rot vel
         # Handler for Tiago
-        self.tiago_handler = TiagoDualWBHandler(move_group=self._move_group, sim_config=self._sim_config, num_envs=self._num_envs, device=self._device)
+        self.tiago_handler = TiagoDualWBHandler(move_group=self._move_group, use_torso=self._use_torso, sim_config=self._sim_config, num_envs=self._num_envs, device=self._device)
 
         RLTask.__init__(self, name, env)
 
@@ -141,7 +144,10 @@ class TiagoDualReachingTask(RLTask):
         # robot_joint_pos = self.tiago_handler.get_robot_obs()
         # Fill observation buffer
         # Goal: 3D pos + rot_quaternion (3+4=7)
-        self.obs_buf = torch.tensor(self._curr_goal_tf)
+        curr_goal_pos = self._curr_goal_tf[0:3,3].unsqueeze(dim=0)
+        curr_goal_quat = torch.tensor(Rotation.from_matrix(self._curr_goal_tf[:3,:3]).as_quat()[[3, 0, 1, 2]],dtype=torch.float,device=self._device).unsqueeze(dim=0)
+
+        self.obs_buf = torch.hstack((curr_goal_pos,curr_goal_quat))
         # TODO: Scale or normalize robot observations as per env
         return self.obs_buf
 
@@ -194,9 +200,19 @@ class TiagoDualReachingTask(RLTask):
         self._curr_goal_tf = torch.matmul(inv_base_tf,self._goal_tf)
 
         # Discrete Arm action:
-        Compute IK to self._curr_goal_tf
-        Set self._ik_fails
-        Set self._is_success
+        self._ik_fails[0] = 0
+        if(actions[0,3] > actions[0,4]): # This is the arm decision variable TODO: Parallelize
+            # Compute IK to self._curr_goal_tf
+            curr_goal_pos = self._curr_goal_tf[0:3,3]
+            curr_goal_quat = Rotation.from_matrix(self._curr_goal_tf[:3,:3]).as_quat()[[3, 0, 1, 2]]
+            success, ik_positions = self._ik_solver.solve_ik_pos_tiago(des_pos=curr_goal_pos.cpu().numpy(), des_quat=curr_goal_quat,
+                                    pos_threshold=self._goal_pos_threshold, angle_threshold=self._goal_ang_threshold, verbose=False)            
+            if success:
+                self._is_success[0] = 1 # Can be used for reward, termination
+                # set upper body positions
+                self.tiago_handler.set_upper_body_positions(jnt_positions=torch.tensor(np.array([ik_positions]),dtype=torch.float,device=self._device))
+            else:
+                self._ik_fails[0] = 1 # Can be used for reward
 
     def reset_idx(self, env_ids):
         # apply resets
@@ -210,11 +226,13 @@ class TiagoDualReachingTask(RLTask):
         self._goal_tf[:3,:3] = torch.tensor(Rotation.from_quat(np.array([self._goals[0,3+1],self._goals[0,3+2],self._goals[0,3+3],self._goals[0,3]])).as_matrix(),dtype=float,device=self._device) # Quaternion in scalar last format!!!
         self._goal_tf[:,-1] = torch.tensor([self._goals[0,0], self._goals[0,1], self._goals[0,2], 1.0],device=self._device) # x,y,z,1
         self._curr_goal_tf = self._goal_tf.clone()
-        self._goals_xy_dist =  torch.linalg.norm(self._goals[:,0:2]) # distance from origin
+        self._goals_xy_dist = torch.linalg.norm(self._goals[:,0:2],dim=1) # distance from origin
         # TODO: Pitch visualizer by 90 degrees
         self._goal_vizs.set_world_poses(indices=indices,positions=self._goals[env_ids,:3],orientations=self._goals[env_ids,3:])
 
         # bookkeeping
+        self._is_success[env_ids] = 0
+        self._ik_fails[env_ids] = 0
         self.reset_buf[env_ids] = 0
         self.progress_buf[env_ids] = 0
         self.extras[env_ids] = 0
@@ -223,7 +241,7 @@ class TiagoDualReachingTask(RLTask):
         # assuming data from obs buffer is available (get_observations() called before this function)
         # Distance reward
         prev_goal_xy_dist = self._goals_xy_dist
-        curr_goal_xy_dist = torch.linalg.norm(self.obs_buf[:,:2])
+        curr_goal_xy_dist = torch.linalg.norm(self.obs_buf[:,:2],dim=1)
         goal_xy_dist_reduction = torch.tensor(prev_goal_xy_dist - curr_goal_xy_dist)
         reward = self._reward_dist_weight*goal_xy_dist_reduction
         # print(f"Goal Dist reward: {reward}")
