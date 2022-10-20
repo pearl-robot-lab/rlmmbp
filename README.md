@@ -45,9 +45,13 @@ Note that we use a modified version of the isaac-sim conda environment `isaac-si
 
 For details about the code structure, have a look at the OmniIsaacGymEnvs docs: https://github.com/NVIDIA-Omniverse/OmniIsaacGymEnvs/tree/main/docs
 
+## Add-ons:
+
+To generate sampled reachability and base-placement maps for a mobile manipulator (as visualized in the paper [1]), have a look at: https://github.com/iROSA-lab/sampled_reachability_maps
+
 ## References
 
-[1] S. Jauhri, J. Peters and G. Chalvatzaki, "Robot Learning of Mobile Manipulation With Reachability Behavior Priors" [1] in IEEE Robotics and Automation Letters, vol. 7, no. 3, pp. 8399-8406, July 2022, doi: 10.1109/LRA.2022.3188109
+[1] S. Jauhri, J. Peters and G. Chalvatzaki, "Robot Learning of Mobile Manipulation With Reachability Behavior Priors" in IEEE Robotics and Automation Letters, vol. 7, no. 3, pp. 8399-8406, July 2022, doi: 10.1109/LRA.2022.3188109
 
 [2] https://github.com/NVIDIA-Omniverse/OmniIsaacGymEnvs
 

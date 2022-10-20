@@ -29,13 +29,15 @@
 
 def initialize_task(config, env, init_sim=True):
     from learned_robot_placement.tasks.tiago_dual_whole_body_example import TiagoDualWBExampleTask
-    from learned_robot_placement.tasks.tiago_dual_reaching import TiagoDualReachingTask    
+    from learned_robot_placement.tasks.tiago_dual_reaching import TiagoDualReachingTask
+    from learned_robot_placement.tasks.tiago_dual_multiobj_fetching import TiagoDualMultiObjFetchingTask
 
 
     # Mappings from strings to environments
     task_map = {
         "TiagoDualWBExample": TiagoDualWBExampleTask,
         "TiagoDualReaching": TiagoDualReachingTask,
+        "TiagoDualMultiObjFetching": TiagoDualMultiObjFetchingTask,
     }
 
     from .config_utils.sim_config import SimConfig

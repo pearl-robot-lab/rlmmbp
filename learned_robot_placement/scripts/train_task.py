@@ -230,9 +230,10 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
                         tau=rl_params_cfg.tau, lr_alpha=rl_params_cfg.lr_alpha, temperature=rl_params_cfg.temperature)
 
             # Setup boosting (for BHyRL):
-            if rl_params_cfg.prior_agent is not None:
+            if rl_params_cfg.prior_agents is not None:
                 prior_agents = list()
-                prior_agents.append(algo.load(rl_params_cfg.prior_agent))
+                for agent_path in rl_params_cfg.prior_agents:
+                    prior_agents.append(algo.load(agent_path))
                 agent.setup_boosting(prior_agents=prior_agents, use_kl_on_pi=rl_params_cfg.use_kl_on_pi, kl_on_pi_alpha=rl_params_cfg.kl_on_pi_alpha)
 
             # Algorithm
