@@ -23,14 +23,14 @@ env:
   # max_rot_vel: 1.0472 # in radians (default is 60 degrees per second)
   # max_base_xy_vel: 0.5 # metres per second
   world_xy_radius: 4.0 # metres
-  num_obstacles: 1 # table
+  num_obstacles: 2 # table
   num_grasp_objects: 4 # YCB objects
   action_xy_radius: 1.0 # position control
   action_ang_lim: 3.14159265 # pi
   # success and rewards:
   goal_pos_thresh: 0.01 # metres
   goal_ang_thresh: 0.08726646259 # 5*np.pi/180
-  goal_z_lim: [0.2, 1.5] # metres
+  # goal_z_lim: [0.2, 1.5] # metres
   reward_success: 1.0
   reward_dist_weight: 0.1
   reward_noIK: -0.05
@@ -61,7 +61,7 @@ sim:
     use_gpu: ${eq:${....sim_device},"gpu"}
     solver_position_iteration_count: 4
     solver_velocity_iteration_count: 0
-    contact_offset: 0.02
+    contact_offset: 0.01
     rest_offset: 0.001
     bounce_threshold_velocity: 0.2
     friction_offset_threshold: 0.04

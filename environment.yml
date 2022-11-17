@@ -176,6 +176,7 @@ dependencies:
     - scikit-learn==1.0.2
     - sentry-sdk==1.9.5
     - setproctitle==1.2.3
+    - shapely==1.8.5
     - shortuuid==1.0.9
     - smmap==5.0.0
     - stable-baselines3==1.2.0

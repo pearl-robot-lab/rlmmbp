@@ -130,7 +130,7 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
     render = cfg.render
     sim_app_cfg_path = cfg.sim_app_cfg_path
     rl_params_cfg = cfg.train.params.config
-    algo_map = {"SAC_hybrid": SAC_hybrid,    # Mappings from strings to algorithms
+    algo_map = {"SAC_hybrid":SAC_hybrid,    # Mappings from strings to algorithms
                 "SAC":SAC,
                 "BHyRL":BHyRL,}
     algo = algo_map[cfg.train.params.algo.name]
@@ -227,13 +227,13 @@ def experiment(cfg: DictConfig = None, cfg_file_path: str = "", seed: int = 0, r
             agent = algo(env.info, actor_mu_params, actor_sigma_params, actor_discrete_params, actor_optimizer, critic_params,
                         batch_size=rl_params_cfg.batch_size, initial_replay_size=rl_params_cfg.initial_replay_size,
                         max_replay_size=rl_params_cfg.max_replay_size, warmup_transitions=rl_params_cfg.warmup_transitions,
-                        tau=rl_params_cfg.tau, lr_alpha=rl_params_cfg.lr_alpha, temperature=rl_params_cfg.temperature)
+                        tau=rl_params_cfg.tau, lr_alpha=rl_params_cfg.lr_alpha, temperature=rl_params_cfg.temperature, log_std_min=rl_params_cfg.log_std_min)
 
             # Setup boosting (for BHyRL):
             if rl_params_cfg.prior_agents is not None:
                 prior_agents = list()
                 for agent_path in rl_params_cfg.prior_agents:
-                    prior_agents.append(algo.load(agent_path))
+                    prior_agents.append(algo.load(os.path.join(learned_robot_placement.__path__[0],agent_path)))
                 agent.setup_boosting(prior_agents=prior_agents, use_kl_on_pi=rl_params_cfg.use_kl_on_pi, kl_on_pi_alpha=rl_params_cfg.kl_on_pi_alpha)
 
             # Algorithm

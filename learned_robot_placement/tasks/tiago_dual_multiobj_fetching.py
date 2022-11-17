@@ -33,6 +33,8 @@ from learned_robot_placement.handlers.tiagodualWBhandler import TiagoDualWBHandl
 from omni.isaac.core.objects.cone import VisualCone
 from omni.isaac.core.prims import GeometryPrimView
 from learned_robot_placement.tasks.utils.pinoc_utils import PinTiagoIKSolver # For IK
+from learned_robot_placement.tasks.utils import scene_utils
+from omni.isaac.isaac_sensor import _isaac_sensor
 
 # from omni.isaac.core.utils.prims import get_prim_at_path
 # from omni.isaac.core.utils.prims import create_prim
@@ -63,39 +65,50 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         self._max_episode_length = self._task_cfg["env"]["horizon"]
         
         self._randomize_robot_on_reset = self._task_cfg["env"]["randomize_robot_on_reset"]
+
+        # Get dt for integrating velocity commands and checking limit violations
+        self._dt = torch.tensor(self._sim_config.task_config["sim"]["dt"]*self._sim_config.task_config["env"]["controlFrequencyInv"],device=self._device)
+
+        # Environment object settings: (reset() randomizes the environment)
+        self._obstacle_names = ["mammut", "godishus"] # ShapeNet models in usd format
+        self._tabular_obstacle_mask = [True, True] # Mask to denote which objects are tabular (i.e. grasp objects can be placed on them)
+        self._grasp_obj_names = ["004_sugar_box", "008_pudding_box", "010_potted_meat_can", "061_foam_brick"] # YCB models in usd format
+        self._num_obstacles = min(self._task_cfg["env"]["num_obstacles"],len(self._obstacle_names))
+        self._num_grasp_objs = min(self._task_cfg["env"]["num_grasp_objects"],len(self._grasp_obj_names))
+        self._obj_states = torch.zeros((6*(self._num_obstacles+self._num_grasp_objs-1),self._num_envs),device=self._device) # All grasp objs except the target object will be used in obj state (BBox)
+        self._obstacles = []
+        self._obstacles_dimensions = []
+        self._grasp_objs = []
+        self._grasp_objs_dimensions = []
+        #  Contact sensor interface for collision detection:
+        self._contact_sensor_interface = _isaac_sensor.acquire_contact_sensor_interface()
+
         # Choose num_obs and num_actions based on task
-        # 6D goal pose only (3 pos + 4 quat = 7)
-        self._num_observations = 7
+        # 6D goal/target object grasp pose + 6D bbox for each obstacle in the room. All grasp objs except the target object will be used in obj state
+        # (3 pos + 4 quat + 6*(n-1)= 7 + )
+        self._num_observations = 7 + len(self._obj_states)
         self._move_group = self._task_cfg["env"]["move_group"]
         self._use_torso = self._task_cfg["env"]["use_torso"]
         # Position control. Actions are base SE2 pose (3) and discrete arm activation (2)
         self._num_actions = self._task_cfg["env"]["continous_actions"] + self._task_cfg["env"]["discrete_actions"]
         # env specific limits
         self._world_xy_radius = self._task_cfg["env"]["world_xy_radius"]
-        self._num_obstacles = self._task_cfg["env"]["num_obstacles"]
-        self._num_grasp_objects = self._task_cfg["env"]["num_grasp_objects"]
         self._action_xy_radius = self._task_cfg["env"]["action_xy_radius"]
         self._action_ang_lim = self._task_cfg["env"]["action_ang_lim"]
         # self.max_arm_vel = torch.tensor(self._task_cfg["env"]["max_rot_vel"], device=self._device)
         # self.max_rot_vel = torch.tensor(self._task_cfg["env"]["max_rot_vel"], device=self._device)
         # self.max_base_xy_vel = torch.tensor(self._task_cfg["env"]["max_base_xy_vel"], device=self._device)
         
-        # End-effector reaching goal settings (reset() randomizes the goal)
-        # Goal is 6D pose (metres, rotation in quaternion: 7 dimensions)
-        self._goal_z_lim = self._task_cfg["env"]["goal_z_lim"]
-        self._goal_lims = torch.tensor([[-self._world_xy_radius,-self._world_xy_radius,self._goal_z_lim[0],-np.pi,-np.pi,-np.pi],
-                                        [ self._world_xy_radius, self._world_xy_radius,self._goal_z_lim[1], np.pi, np.pi, np.pi]], device=self._device)
-        self._goal_distribution = torch.distributions.Uniform(self._goal_lims[0], self._goal_lims[1])
-        goals_sample = self._goal_distribution.sample((self.num_envs,))
+        # End-effector reaching settings
+        self._goal_pos_threshold = self._task_cfg["env"]["goal_pos_thresh"]
+        self._goal_ang_threshold = self._task_cfg["env"]["goal_ang_thresh"]
+        # For now, setting dummy goal:
         self._goals = torch.hstack((torch.tensor([[0.8,0.0,0.4+0.15]]),euler_angles_to_quats(torch.tensor([[0.19635, 1.375, 0.19635]]),device=self._device)))[0].repeat(self.num_envs,1)
-        # self._goals = torch.hstack((goals_sample[:,:3],euler_angles_to_quats(goals_sample[:,3:6],device=self._device)))
         self._goal_tf = torch.zeros((4,4),device=self._device)
         self._goal_tf[:3,:3] = torch.tensor(Rotation.from_quat(np.array([self._goals[0,3+1],self._goals[0,3+2],self._goals[0,3+3],self._goals[0,3]])).as_matrix(),dtype=float,device=self._device) # Quaternion in scalar last format!!!
         self._goal_tf[:,-1] = torch.tensor([self._goals[0,0], self._goals[0,1], self._goals[0,2], 1.0],device=self._device) # x,y,z,1
         self._curr_goal_tf = self._goal_tf.clone()
         self._goals_xy_dist = torch.linalg.norm(self._goals[:,0:2],dim=1)  # distance from origin
-        self._goal_pos_threshold = self._task_cfg["env"]["goal_pos_thresh"]
-        self._goal_ang_threshold = self._task_cfg["env"]["goal_ang_thresh"]
 
         # Reward settings
         self._reward_success = self._task_cfg["env"]["reward_success"]
@@ -103,11 +116,9 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         self._reward_noIK = self._task_cfg["env"]["reward_noIK"]
         # self._reward_timeout = self._task_cfg["env"]["reward_timeout"]
         self._reward_collision = self._task_cfg["env"]["reward_collision"]
+        self._collided = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
         self._ik_fails = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
         self._is_success = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
-
-        # Get dt for integrating velocity commands and checking limit violations
-        self._dt = torch.tensor(self._sim_config.task_config["sim"]["dt"]*self._sim_config.task_config["env"]["controlFrequencyInv"],device=self._device)
 
         # IK solver
         self._ik_solver = PinTiagoIKSolver(move_group=self._move_group, include_torso=self._use_torso, include_base=False, max_rot_vel=100.0) # No max rot vel
@@ -117,17 +128,40 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         RLTask.__init__(self, name, env)
 
     def set_up_scene(self, scene) -> None:
+        import omni
         self.tiago_handler.get_robot()
+        # Spawn obstacles (from ShapeNet usd models):
+        for i in range(self._num_obstacles):
+            obst = scene_utils.spawn_obstacle(name=self._obstacle_names[i], prim_path=self.tiago_handler.default_zero_env_path, device=self._device)
+            self._obstacles.append(obst) # Add to list of obstacles (Geometry Prims)
+            # Optional: Add contact sensors for collision detection. Covers whole body by default
+            omni.kit.commands.execute("IsaacSensorCreateContactSensor", path="/Contact_Sensor", sensor_period=float(self._sim_config.task_config["sim"]["dt"]),
+                parent=obst.prim_path)
+        # Spawn grasp objs (from YCB usd models):
+        for i in range(self._num_grasp_objs):
+            grasp_obj = scene_utils.spawn_grasp_object(name=self._grasp_obj_names[i], prim_path=self.tiago_handler.default_zero_env_path, device=self._device)
+            self._grasp_objs.append(grasp_obj) # Add to list of grasp objects (Rigid Prims)
+            # Optional: Add contact sensors for collision detection. Covers whole body by default
+            omni.kit.commands.execute("IsaacSensorCreateContactSensor", path="/Contact_Sensor", sensor_period=float(self._sim_config.task_config["sim"]["dt"]),
+                parent=grasp_obj.prim_path)
         # Goal visualizer
         goal_viz = VisualCone(prim_path=self.tiago_handler.default_zero_env_path+"/goal",
-                radius=0.05,height=0.05,color=np.array([1.0,0.0,0.0]))
+                                radius=0.05,height=0.05,color=np.array([1.0,0.0,0.0]))
         super().set_up_scene(scene)
         self._robots = self.tiago_handler.create_articulation_view()
         scene.add(self._robots)
         self._goal_vizs = GeometryPrimView(prim_paths_expr="/World/envs/.*/goal",name="goal_viz")
         scene.add(self._goal_vizs)
+        # Enable object axis-aligned bounding box computations
+        scene.enable_bounding_boxes_computations()
+        # Add spawned objects to scene registry and store their bounding boxes:
+        for obst in self._obstacles:
+            scene.add(obst)
+            self._obstacles_dimensions.append(scene.compute_object_AABB(obst.name)) # Axis aligned bounding box used as dimensions
+        for grasp_obj in self._grasp_objs:
+            scene.add(grasp_obj)
+            self._grasp_objs_dimensions.append(scene.compute_object_AABB(grasp_obj.name)) # Axis aligned bounding box used as dimensions
         # Optional viewport for rendering in a separate viewer
-        import omni.kit
         from omni.isaac.synthetic_utils import SyntheticDataHelper
         self.viewport_window = omni.kit.viewport_legacy.get_default_viewport_window()
         self.sd_helper = SyntheticDataHelper()
@@ -148,8 +182,9 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         # Goal: 3D pos + rot_quaternion (3+4=7)
         curr_goal_pos = self._curr_goal_tf[0:3,3].unsqueeze(dim=0)
         curr_goal_quat = torch.tensor(Rotation.from_matrix(self._curr_goal_tf[:3,:3]).as_quat()[[3, 0, 1, 2]],dtype=torch.float,device=self._device).unsqueeze(dim=0)
-
-        self.obs_buf = torch.hstack((curr_goal_pos,curr_goal_quat))
+        # oriented bounding boxes of objects
+        curr_bboxes_flattened = self._curr_obj_bboxes.flatten().unsqueeze(dim=0)
+        self.obs_buf = torch.hstack((curr_goal_pos,curr_goal_quat,curr_bboxes_flattened))
         # TODO: Scale or normalize robot observations as per env
         return self.obs_buf
 
@@ -196,10 +231,18 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         
         # Move base
         self.tiago_handler.set_base_positions(torch.hstack((new_base_xy,new_base_theta)))
-
+        
         # Transform goal to robot frame
         inv_base_tf = torch.linalg.inv(new_base_tf)
         self._curr_goal_tf = torch.matmul(inv_base_tf,self._goal_tf)
+        # Transform all other object oriented bounding boxes to robot frame
+        for obj_num in range(self._num_obstacles+self._num_grasp_objs-1):
+            min_xy_vertex = torch.hstack(( self._obj_bboxes[obj_num,0:2], torch.tensor([0.0, 1.0],device=self._device) )).T
+            max_xy_vertex = torch.hstack(( self._obj_bboxes[obj_num,2:4], torch.tensor([0.0, 1.0],device=self._device) )).T
+            new_min_xy_vertex = torch.matmul(inv_base_tf,min_xy_vertex)[0:2].T.squeeze()
+            new_max_xy_vertex = torch.matmul(inv_base_tf,max_xy_vertex)[0:2].T.squeeze()
+            self._curr_obj_bboxes[obj_num,0:4] = torch.hstack(( new_min_xy_vertex, new_max_xy_vertex ))
+            self._curr_obj_bboxes[obj_num,5] -= theta_scaled[0] # new theta
 
         # Discrete Arm action:
         self._ik_fails[0] = 0
@@ -208,7 +251,7 @@ class TiagoDualMultiObjFetchingTask(RLTask):
             curr_goal_pos = self._curr_goal_tf[0:3,3]
             curr_goal_quat = Rotation.from_matrix(self._curr_goal_tf[:3,:3]).as_quat()[[3, 0, 1, 2]]
             success, ik_positions = self._ik_solver.solve_ik_pos_tiago(des_pos=curr_goal_pos.cpu().numpy(), des_quat=curr_goal_quat,
-                                    pos_threshold=self._goal_pos_threshold, angle_threshold=self._goal_ang_threshold, verbose=False)            
+                                    pos_threshold=self._goal_pos_threshold, angle_threshold=self._goal_ang_threshold, verbose=False)
             if success:
                 self._is_success[0] = 1 # Can be used for reward, termination
                 # set upper body positions
@@ -221,16 +264,23 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         indices = env_ids.to(dtype=torch.int32)
         # reset dof values
         self.tiago_handler.reset(indices,randomize=self._randomize_robot_on_reset)
-        # create new end-effector goal and respective visualization
-        goals_sample = self._goal_distribution.sample((len(env_ids),))
-        self._goals[env_ids] = torch.hstack((goals_sample[:,:3],euler_angles_to_quats(goals_sample[:,3:6],device=self._device)))
+        # reset the scene objects (randomize), get target end-effector goal/grasp as well as oriented bounding boxes of all other objects
+        self._curr_grasp_obj, self._goals[env_ids], self._obj_bboxes = scene_utils.setup_tabular_scene(
+                                self, self._obstacles, self._tabular_obstacle_mask, self._grasp_objs,
+                                self._obstacles_dimensions, self._grasp_objs_dimensions, self._world_xy_radius, self._device)
+        self._curr_obj_bboxes = self._obj_bboxes.clone()
+        # self._goals[env_ids] = torch.hstack((goals_sample[:,:3],euler_angles_to_quats(goals_sample[:,3:6],device=self._device)))
+        
         self._goal_tf = torch.zeros((4,4),device=self._device)
-        self._goal_tf[:3,:3] = torch.tensor(Rotation.from_quat(np.array([self._goals[0,3+1],self._goals[0,3+2],self._goals[0,3+3],self._goals[0,3]])).as_matrix(),dtype=float,device=self._device) # Quaternion in scalar last format!!!
+        goal_rot = Rotation.from_quat(np.array([self._goals[0,3+1],self._goals[0,3+2],self._goals[0,3+3],self._goals[0,3]])) # Quaternion in scalar last format!!!
+        self._goal_tf[:3,:3] = torch.tensor(goal_rot.as_matrix(),dtype=float,device=self._device)
         self._goal_tf[:,-1] = torch.tensor([self._goals[0,0], self._goals[0,1], self._goals[0,2], 1.0],device=self._device) # x,y,z,1
         self._curr_goal_tf = self._goal_tf.clone()
         self._goals_xy_dist = torch.linalg.norm(self._goals[:,0:2],dim=1) # distance from origin
-        # TODO: Pitch visualizer by 90 degrees
-        self._goal_vizs.set_world_poses(indices=indices,positions=self._goals[env_ids,:3],orientations=self._goals[env_ids,3:])
+        # Pitch visualizer by 90 degrees for aesthetics
+        goal_viz_rot = goal_rot * Rotation.from_euler("xyz", [0,np.pi/2.0,0])
+        self._goal_vizs.set_world_poses(indices=indices,positions=self._goals[env_ids,:3],
+                orientations=torch.tensor(goal_viz_rot.as_quat()[[3, 0, 1, 2]],device=self._device).unsqueeze(dim=0))
 
         # bookkeeping
         self._is_success[env_ids] = 0
@@ -239,21 +289,53 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         self.progress_buf[env_ids] = 0
         self.extras[env_ids] = 0
 
+
+    def check_robot_collisions(self):
+        # Check if the robot collided with an object
+        # TODO: Parallelize
+        for obst in self._obstacles:
+            raw_readings = self._contact_sensor_interface.get_contact_sensor_raw_data(obst.prim_path + "/Contact_Sensor")
+            if raw_readings.shape[0]:                
+                for reading in raw_readings:
+                    if "Tiago" in str(self._contact_sensor_interface.decode_body_name(reading["body1"])):
+                        return True # Collision detected with some part of the robot
+                    if "Tiago" in str(self._contact_sensor_interface.decode_body_name(reading["body0"])):
+                        return True # Collision detected with some part of the robot
+        for grasp_obj in self._grasp_objs:
+            if grasp_obj == self._curr_grasp_obj: continue # Important. Exclude current target object for collision checking
+
+            raw_readings = self._contact_sensor_interface.get_contact_sensor_raw_data(grasp_obj.prim_path + "/Contact_Sensor")
+            if raw_readings.shape[0]:
+                for reading in raw_readings:
+                    if "Tiago" in str(self._contact_sensor_interface.decode_body_name(reading["body1"])):
+                        return True # Collision detected with some part of the robot
+                    if "Tiago" in str(self._contact_sensor_interface.decode_body_name(reading["body0"])):
+                        return True # Collision detected with some part of the robot
+        return False
+    
+
     def calculate_metrics(self) -> None:
         # assuming data from obs buffer is available (get_observations() called before this function)
-        # Distance reward
-        prev_goal_xy_dist = self._goals_xy_dist
-        curr_goal_xy_dist = torch.linalg.norm(self.obs_buf[:,:2],dim=1)
-        goal_xy_dist_reduction = torch.tensor(prev_goal_xy_dist - curr_goal_xy_dist)
-        reward = self._reward_dist_weight*goal_xy_dist_reduction
-        # print(f"Goal Dist reward: {reward}")
-        self._goals_xy_dist = curr_goal_xy_dist
 
-        # IK fail reward (penalty)
-        reward += self._reward_noIK*self._ik_fails
+        if(self.check_robot_collisions()): # TODO: Parallelize
+            # Collision detected. Give penalty and no other rewards
+            self._collided[0] = 1
+            self._is_success[0] = 0 # Success isn't considered in this case
+            reward = torch.tensor(self._reward_collision, device=self._device)
+        else:
+            # Distance reward
+            prev_goal_xy_dist = self._goals_xy_dist
+            curr_goal_xy_dist = torch.linalg.norm(self.obs_buf[:,:2],dim=1)
+            goal_xy_dist_reduction = (prev_goal_xy_dist - curr_goal_xy_dist).clone()
+            reward = self._reward_dist_weight*goal_xy_dist_reduction
+            # print(f"Goal Dist reward: {reward}")
+            self._goals_xy_dist = curr_goal_xy_dist
 
-        # Success reward
-        reward += self._reward_success*self._is_success
+            # IK fail reward (penalty)
+            reward += self._reward_noIK*self._ik_fails
+
+            # Success reward
+            reward += self._reward_success*self._is_success
         # print(f"Total reward: {reward}")
         self.rew_buf[:] = reward
         self.extras[:] = self._is_success.clone() # Track success
@@ -263,6 +345,8 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         # resets = torch.where(torch.abs(pole_pos) > np.pi / 2, 1, resets)
         # resets = torch.zeros(self._num_envs, dtype=int, device=self._device)
         
-        # reset if success OR if reached max episode length
-        resets = torch.where(self.progress_buf >= self._max_episode_length, 1, self._is_success)
+        # reset if success OR collided OR if reached max episode length
+        resets = self._is_success
+        resets = torch.where(self._collided.bool(), 1, resets)
+        resets = torch.where(self.progress_buf >= self._max_episode_length, 1, resets)
         self.reset_buf[:] = resets

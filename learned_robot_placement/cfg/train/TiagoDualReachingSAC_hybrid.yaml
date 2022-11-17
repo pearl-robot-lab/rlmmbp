@@ -29,6 +29,7 @@ params:
     lr_alpha: 0.0003
     temperature: 1.0 # For the softmax of gumbel
     # target_entropy: # automatic as per action space
+    log_std_min: -3 # Clip the agent's policy log std to avoid very narrow gaussian policies
     # runner:
     n_epochs: 250
     n_steps: 400 # training
