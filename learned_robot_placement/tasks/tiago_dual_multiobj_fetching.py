@@ -266,7 +266,7 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         self.tiago_handler.reset(indices,randomize=self._randomize_robot_on_reset)
         # reset the scene objects (randomize), get target end-effector goal/grasp as well as oriented bounding boxes of all other objects
         self._curr_grasp_obj, self._goals[env_ids], self._obj_bboxes = scene_utils.setup_tabular_scene(
-                                self, self._obstacles, self._tabular_obstacle_mask, self._grasp_objs,
+                                self, self._obstacles, self._tabular_obstacle_mask[0:self._num_obstacles], self._grasp_objs,
                                 self._obstacles_dimensions, self._grasp_objs_dimensions, self._world_xy_radius, self._device)
         self._curr_obj_bboxes = self._obj_bboxes.clone()
         # self._goals[env_ids] = torch.hstack((goals_sample[:,:3],euler_angles_to_quats(goals_sample[:,3:6],device=self._device)))

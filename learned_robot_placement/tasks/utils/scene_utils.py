@@ -87,7 +87,7 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
     tab_phi = np.random.uniform(-np.pi,np.pi)
     tab_x, tab_y = tab_r*np.cos(tab_phi), tab_r*np.sin(tab_phi)
     tab_position = [tab_x,tab_y,tab_z_to_ground]
-    obstacles[tab_index].set_world_pose(position=torch.tensor(tab_position,device=device),
+    obstacles[tab_index].set_world_pose(position=torch.tensor(tab_position,dtype=torch.float,device=device),
                                     orientation=torch.tensor([0.707106, 0.707106, 0.0, 0.0], device=device)) # Shapenet model: Rotate in X direction by 90 degrees
     # Don't add a random orientation to tabular obstacle yet. We will add it after placing the grasp objects on it
 
@@ -203,7 +203,7 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
     goal_pitch = np.pi/2.0 # np.random.uniform(0,np.pi/2.0)
     goal_yaw = object_yaws[goal_obj_index]
     goal_position = np.array(object_positions[goal_obj_index])
-    goal_position[2] = (grasp_obj_aabboxes[goal_obj_index][1,2] + np.random.uniform(0.08,0.20)) # Add (random) z offset to object top (8 to 20 cms)
+    goal_position[2] = (grasp_obj_aabboxes[goal_obj_index][1,2] + np.random.uniform(0.05,0.20)) # Add (random) z offset to object top (5 to 20 cms)
     goal_pose = torch.hstack(( torch.tensor(goal_position,dtype=torch.float,device=device),
                         euler_angles_to_quats(torch.tensor([[goal_roll,goal_pitch,goal_yaw]],dtype=torch.float,device=device))[0] ))
 
