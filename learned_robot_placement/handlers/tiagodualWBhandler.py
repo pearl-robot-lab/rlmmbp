@@ -30,6 +30,8 @@ class TiagoDualWBHandler(TiagoBaseHandler):
                                             1.5708, 1.5708, -1.5708, 1.5708], device=self._device)
         self.arm_right_start = torch.tensor([0.0, 1.5708, 1.5708,
                                             1.5708, 1.5708, -1.5708, 1.5708], device=self._device)
+        self.gripper_left_start = torch.tensor([0.045, 0.045], device=self._device) # Opened gripper by default
+        self.gripper_right_start = torch.tensor([0.045, 0.045], device=self._device) # Opened gripper by default
         self.torso_fixed_state = torch.tensor([0.25], device=self._device)
 
         self.default_zero_env_path = "/World/envs/env_0"
@@ -65,12 +67,16 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         #                                  [ 0., 1.,  0.,  0.      ],
         #                                  [ 1., 0.,  0.,  0.196575],
         #                                  [ 0., 0.,  0.,  1.      ]])
+        self._gripper_left_names = ["gripper_left_left_finger_joint","gripper_left_right_finger_joint"]
+        self._gripper_right_names = ["gripper_right_left_finger_joint","gripper_right_right_finger_joint"]
 
         # values are set in post_reset after model is loaded        
         self.base_dof_idxs = []
         self.torso_dof_idx = []
         self.arm_left_dof_idxs = []
         self.arm_right_dof_idxs = []
+        self.gripper_left_dof_idxs = []
+        self.gripper_right_dof_idxs = []
         self.upper_body_dof_idxs = []
         self.combined_dof_idxs = []
 
@@ -111,6 +117,8 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         [self.torso_dof_idx.append(self.robots.get_dof_index(name)) for name in self._torso_joint_name]
         [self.arm_left_dof_idxs.append(self.robots.get_dof_index(name)) for name in self._arm_left_names]
         [self.arm_right_dof_idxs.append(self.robots.get_dof_index(name)) for name in self._arm_right_names]
+        [self.gripper_left_dof_idxs.append(self.robots.get_dof_index(name)) for name in self._gripper_left_names]
+        [self.gripper_right_dof_idxs.append(self.robots.get_dof_index(name)) for name in self._gripper_right_names]
         self.upper_body_dof_idxs = []
         if self._use_torso:
             self.upper_body_dof_idxs += self.torso_dof_idx
@@ -149,6 +157,9 @@ class TiagoDualWBHandler(TiagoBaseHandler):
         jt_pos[:, self.torso_dof_idx] = self.torso_fixed_state
         jt_pos[:, self.arm_left_dof_idxs] = self.arm_left_start
         jt_pos[:, self.arm_right_dof_idxs] = self.arm_right_start
+        jt_pos[:, self.gripper_left_dof_idxs] = self.gripper_left_start
+        jt_pos[:, self.gripper_right_dof_idxs] = self.gripper_right_start
+        
         self.robots.set_joints_default_state(positions=jt_pos)
     
     def apply_actions(self, actions):

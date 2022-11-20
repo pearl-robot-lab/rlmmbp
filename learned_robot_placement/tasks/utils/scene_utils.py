@@ -75,7 +75,7 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
     
     object_positions, object_yaws, objects_dimensions = [], [], []
     obst_aabboxes, grasp_obj_aabboxes = [], []
-    robot_radius = 0.4 # metres. To exclude circle at origin where the robot (Tiago) is
+    robot_radius = 0.45 # metres. To exclude circle at origin where the robot (Tiago) is
 
     # Choose one tabular obstacle to place grasp objects on
     tab_index = np.random.choice(np.nonzero(tabular_obstacle_mask)[0])
@@ -87,7 +87,8 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
     tab_phi = np.random.uniform(-np.pi,np.pi)
     tab_x, tab_y = tab_r*np.cos(tab_phi), tab_r*np.sin(tab_phi)
     tab_position = [tab_x,tab_y,tab_z_to_ground]
-    obstacles[tab_index].set_world_pose(position=torch.tensor(tab_position,device=device))
+    obstacles[tab_index].set_world_pose(position=torch.tensor(tab_position,device=device),
+                                    orientation=torch.tensor([0.707106, 0.707106, 0.0, 0.0], device=device)) # Shapenet model: Rotate in X direction by 90 degrees
     # Don't add a random orientation to tabular obstacle yet. We will add it after placing the grasp objects on it
 
     # Place all grasp objects on the tabular obstacle (without overlaps)
@@ -97,7 +98,8 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
         while(1): # Be careful about infinite loops!
             # Add random orientation (yaw) to object
             grasp_obj_yaw = np.random.uniform(-np.pi,np.pi) # random yaw            
-            grasp_objs[idx].set_world_pose(orientation=euler_angles_to_quats(torch.tensor([[-torch.pi/2,0,grasp_obj_yaw]],device=device))[0]) # YCB needs X -90 deg rotation
+            grasp_objs[idx].set_world_pose(position= torch.tensor([0.0, 0.0, 0.0], device=device),
+                        orientation=euler_angles_to_quats(torch.tensor([[-torch.pi/2,0,grasp_obj_yaw]],device=device))[0]) # YCB needs X -90 deg rotation
             # compute new AxisAligned bbox
             self._scene._bbox_cache.Clear()
             grasp_obj_aabbox = self._scene.compute_object_AABB(grasp_objs[idx].name)
@@ -131,7 +133,7 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
                 object_yaws.append(grasp_obj_yaw)
                 objects_dimensions.append(grasp_objs_dimensions[idx])
                 break
-    import pdb; pdb.set_trace()
+    
     # Now add a random orientation to the tabular obstacle and move all the grasp objects placed on it accordingly
     tab_yaw = np.random.uniform(-np.pi,np.pi) # random yaw
     obstacles[tab_index].set_world_pose(orientation=euler_angles_to_quats(torch.tensor([[torch.pi/2,0,tab_yaw]],device=device))[0])
@@ -152,7 +154,7 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
     objects_dimensions.append(obstacles_dimensions[tab_index])
     self._scene._bbox_cache.Clear()
     obst_aabboxes.append(self._scene.compute_object_AABB(obstacles[tab_index].name))
-    import pdb; pdb.set_trace()
+    
     # Now we need to place all the other obstacles (without overlaps):
     for idx, _ in enumerate(obstacles):
         if (idx == tab_index): continue # Skip this since we have already placed tabular obstacle
