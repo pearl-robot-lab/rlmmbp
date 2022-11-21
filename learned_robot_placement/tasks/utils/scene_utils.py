@@ -24,7 +24,7 @@ def spawn_obstacle(name, prim_path, device):
     object_usd_path = os.path.join(get_usd_path(),'Props','Shapenet',name,'models','model_normalized.usd')
     add_reference_to_stage(object_usd_path, prim_path + "/obstacle/" + name)
 
-    obj = GeometryPrim( # Geometry Prim since robot should not be able to move it
+    obj = GeometryPrim(
         prim_path=prim_path + "/obstacle/" + name,
         name=name,
         position= torch.tensor([0.0, 0.0, 0.0], device=device),
@@ -34,6 +34,19 @@ def spawn_obstacle(name, prim_path, device):
     )
     # Enable tight collision approximation
     obj.set_collision_approximation("convexDecomposition")
+
+    RigidPrim.__init__(
+        obj,
+        prim_path=prim_path + "/obstacle/" + name,
+        name=obj.name,
+        position= torch.tensor([0.0, 0.0, 0.0], device=device),
+        orientation= torch.tensor([0.707106, 0.707106, 0.0, 0.0], device=device), # Shapenet model may be downward facing. Rotate in X direction by 90 degrees,
+        scale=[0.01,0.01,0.01], # Has to be scaled down to metres. Default usd units for these objects is cms
+        # visible=visible,
+        # mass=mass,
+        # linear_velocity=linear_velocity,
+        # angular_velocity=angular_velocity,
+    )
 
     return obj
 
@@ -52,15 +65,17 @@ def spawn_grasp_object(name, prim_path, device):
         scale=[0.01,0.01,0.01], # Has to be scaled down to metres. Default usd units for these objects is cms
         collision=True
     )
+    # Enable tight collision approximation
     obj.set_collision_approximation("convexDecomposition")
 
-    # RigidPrim.__init__(obj, # Add Rigid prim attributes since it can move
-    #     prim_path=prim_path + "/grasp_obj/ycb_" + name,
-    #     name=name,
-    #     position= torch.tensor([0.0, 0.0, 0.0], device=device),
-    #     orientation= torch.tensor([0.707106, -0.707106, 0.0, 0.0], device=device), # YCB model may be downward facing. Rotate in X direction by -90 degrees,
-    #     scale=[0.01,0.01,0.01] # Has to be scaled down to metres. Default usd units for these objects is cms
-    # )
+    RigidPrim.__init__(
+        obj, # Add Rigid prim attributes since it can move
+        prim_path=prim_path + "/grasp_obj/ycb_" + name,
+        name=name,
+        position= torch.tensor([0.0, 0.0, 0.0], device=device),
+        orientation= torch.tensor([0.707106, -0.707106, 0.0, 0.0], device=device), # YCB model may be downward facing. Rotate in X direction by -90 degrees,
+        scale=[0.01,0.01,0.01] # Has to be scaled down to metres. Default usd units for these objects is cms
+    )
     # Add collider to rigid body with tight collision approximation (Redundant if collider already set)
     # utils.setRigidBody(obj.prim, "convexDecomposition", False)
 
@@ -97,7 +112,7 @@ def setup_tabular_scene(self, obstacles, tabular_obstacle_mask, grasp_objs, obst
         
         while(1): # Be careful about infinite loops!
             # Add random orientation (yaw) to object
-            grasp_obj_yaw = np.random.uniform(-np.pi,np.pi) # random yaw            
+            grasp_obj_yaw = np.random.uniform(-np.pi,np.pi) # random yaw
             grasp_objs[idx].set_world_pose(position= torch.tensor([0.0, 0.0, 0.0], device=device),
                         orientation=euler_angles_to_quats(torch.tensor([[-torch.pi/2,0,grasp_obj_yaw]],device=device))[0]) # YCB needs X -90 deg rotation
             # compute new AxisAligned bbox
