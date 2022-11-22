@@ -285,6 +285,7 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         # bookkeeping
         self._is_success[env_ids] = 0
         self._ik_fails[env_ids] = 0
+        self._collided[env_ids] = 0
         self.reset_buf[env_ids] = 0
         self.progress_buf[env_ids] = 0
         self.extras[env_ids] = 0
@@ -346,7 +347,7 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         # resets = torch.zeros(self._num_envs, dtype=int, device=self._device)
         
         # reset if success OR collided OR if reached max episode length
-        resets = self._is_success
+        resets = self._is_success.clone()
         resets = torch.where(self._collided.bool(), 1, resets)
         resets = torch.where(self.progress_buf >= self._max_episode_length, 1, resets)
         self.reset_buf[:] = resets
