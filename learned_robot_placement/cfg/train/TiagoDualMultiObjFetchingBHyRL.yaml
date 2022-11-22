@@ -35,6 +35,6 @@ params:
     n_steps: 800 # training
     n_steps_test: 120
     # boosting:
-    prior_agents: null #[logs/TiagoDualReaching/TiagoDualReachingBHyRL/2022-11-11-15-42-48/2022-11-11-17-28-13/agent-212.msh] # list of prior agent paths
+    prior_agents: [logs/TiagoDualReaching/TiagoDualReachingBHyRL/2022-11-11-15-42-48/2022-11-11-17-28-13/agent-212.msh] # list of prior agent paths
     use_kl_on_pi: True
     kl_on_pi_alpha: 1e-3
