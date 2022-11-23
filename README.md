@@ -36,14 +36,37 @@ Note that we use a modified version of the isaac-sim conda environment `isaac-si
     pip install -e .
     ```
 
-## Launching experiments
+## Experiments
 
+### Launching the experiments
+- Activate the conda environment:
+    ```
+    conda activate isaac-sim-lrp
+    ```
+- source the isaac-sim conda_setup file:
+    ```
+    source <PATH_TO_ISAAC_SIM>/isaac_sim-2022.1.0/setup_conda_env.sh
+    ```
 - To test the installation, an example random policy can be run:
     ```
-    python learned_robot_placement/scripts/random_policy.py```
-- ****TODO****
+    python learned_robot_placement/scripts/random_policy.py
+    ```
+- To launch a training experiment for a simple 6D reaching task in free space, run:
+    ```
+    python learned_robot_placement/scripts/train_task.py task=TiagoDualReaching train=TiagoDualReachingBHyRL num_seeds=1 headless=True
+    ```
+- To launch a training experiment for a reaching task with a table and multiple objects (while **boosting** on a previously trained agent in free-space), run:
+    ```
+    python learned_robot_placement/scripts/train_task.py task=TiagoDualMultiObjFetching train=TiagoDualMultiObjFetchingBHyRL num_seeds=1 headless=True
+    ```
 
-For details about the code structure, have a look at the OmniIsaacGymEnvs docs: https://github.com/NVIDIA-Omniverse/OmniIsaacGymEnvs/tree/main/docs
+### Configuration and command line arguments
+
+- We use [Hydra](https://hydra.cc/docs/intro/) to manage the experiment configuration
+- Common arguments for the training scripts are: `task=TASK` (Selects which task to use) and `train=TRAIN` (Selects which training config to use).
+- You can check current configurations in the `/cfg` folder
+
+For more details about the code structure, have a look at the OmniIsaacGymEnvs docs: https://github.com/NVIDIA-Omniverse/OmniIsaacGymEnvs/tree/main/docs
 
 ## Add-ons:
 
@@ -58,3 +81,7 @@ To generate sampled reachability and base-placement maps for a mobile manipulato
 [3] https://github.com/stack-of-tasks/pinocchio
 
 [4] C. D’Eramo, D. Tateo, A. Bonarini, M. Restelli, and J. Peters, “Mushroom-rl: Simplifying reinforcement learning research,” JMLR, vol. 22, pp. 131:1–131:5, 2021
+
+## Troubleshooting
+
+- **"[Error] [omni.physx.plugin] PhysX error: PxRigidDynamic::setGlobalPose: pose is not valid."** This error can be **ignored** for now. Isaac-sim 2022.1.0 has some trouble handling the set_world_pose() function for RigidPrims, but this doesn't affect the experiments.
