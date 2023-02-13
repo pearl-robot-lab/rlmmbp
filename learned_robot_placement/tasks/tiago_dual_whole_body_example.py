@@ -33,6 +33,7 @@ from learned_robot_placement.handlers.tiagodualWBhandler import TiagoDualWBHandl
 # from omni.isaac.core.utils.prims import get_prim_at_path
 # from omni.isaac.core.utils.prims import create_prim
 # from omni.isaac.core.utils.stage import add_reference_to_stage
+from omni.kit.viewport.utility import get_viewport_from_window_name
 
 # Whole Body example task with holonomic robot base
 class TiagoDualWBExampleTask(RLTask):
@@ -67,7 +68,7 @@ class TiagoDualWBExampleTask(RLTask):
         self.max_base_xy_vel = torch.tensor(self._task_cfg["env"]["max_base_xy_vel"], device=self._device)
 
         # Handler for Tiago
-        self.tiago_handler = TiagoDualWBHandler(move_group=self._move_group, sim_config=self._sim_config, num_envs=self._num_envs, device=self._device)
+        self.tiago_handler = TiagoDualWBHandler(move_group=self._move_group, use_torso=False, sim_config=self._sim_config, num_envs=self._num_envs, device=self._device)
 
         RLTask.__init__(self, name, env)
 
@@ -77,11 +78,10 @@ class TiagoDualWBExampleTask(RLTask):
         self._robots = self.tiago_handler.create_articulation_view()
         scene.add(self._robots)
         # Optional viewport for rendering in a separate viewer
-        import omni.kit
         from omni.isaac.synthetic_utils import SyntheticDataHelper
-        self.viewport_window = omni.kit.viewport_legacy.get_default_viewport_window()
+        self.viewport_api_window = get_viewport_from_window_name("Viewport")
         self.sd_helper = SyntheticDataHelper()
-        self.sd_helper.initialize(sensor_names=["rgb"], viewport=self.viewport_window)
+        self.sd_helper.initialize(sensor_names=["rgb"], viewport_api=self.viewport_api_window)
 
     def post_reset(self):
         # reset that takes place when the isaac world is reset (typically happens only once)
@@ -97,7 +97,7 @@ class TiagoDualWBExampleTask(RLTask):
     def get_render(self):
         # Get ground truth viewport rgb image
         gt = self.sd_helper.get_groundtruth(
-            ["rgb"], self.viewport_window, verify_sensor_init=False, wait_for_sensor_data=0
+            ["rgb"], self.viewport_api_window, verify_sensor_init=False, wait_for_sensor_data=0
         )
         return gt["rgb"][:, :, :3]
     

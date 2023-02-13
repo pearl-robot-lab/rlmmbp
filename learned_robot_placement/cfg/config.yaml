@@ -19,8 +19,8 @@ render: False
 seed: -1
 # set to True for deterministic performance
 torch_deterministic: False
-# Use the isaac sim configuration from file
-sim_app_cfg_path: "/isaac_app_configs/omni.isaac.sim.python_minimal.kit"
+# (Optional) Use the isaac sim configuration from file
+sim_app_cfg_path: "" # "/isaac_app_configs/omni.isaac.sim.python.kit"
 # set the maximum number of learning iterations to train for. overrides default per-environment setting
 # max_iterations: 500
 
@@ -30,7 +30,7 @@ physics_engine: 'physx'
 pipeline: 'cpu' # 'gpu'
 # whether to use cpu or gpu physx
 sim_device: 'cpu' # 'gpu'
-# used for gpu pipeline only - device id for running sim and task
+# used for gpu simulation only - device id for running sim and task if pipeline=gpu
 device_id: 0
 # device to run RL
 rl_device: 'cuda:0' #'cpu' # 'cuda:0'
@@ -46,6 +46,14 @@ test: False
 checkpoint: ''
 # number of seeds to run (run sequentially by default)
 num_seeds: 5
+
+# Wandb settings (optional)
+# TODO
+# wandb_activate: False
+# wandb_group: ''
+# wandb_name: ${train.params.config.name}
+# wandb_entity: ''
+# wandb_project: 'omniisaacgymenvs'
 
 # set the directory where the output files get saved
 hydra:

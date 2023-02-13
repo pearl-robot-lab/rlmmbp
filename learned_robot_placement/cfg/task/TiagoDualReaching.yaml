@@ -12,6 +12,9 @@ env:
   
   gamma: 0.95
   horizon: 10
+  # episodeLength: 1000
+  enableDebugVis: False
+
   # Move group to be used
   move_group: "arm_left" # String. Can be arm_left or arm_right
   use_torso: True # Use torso joint too
@@ -46,6 +49,10 @@ sim:
   add_distant_light: True
   use_flatcache: True
   enable_scene_query_support: False
+  disable_contact_processing: False
+
+  # set to True if you use camera sensors in the environment
+  enable_cameras: False
 
   default_physics_material:
     static_friction: 1.0

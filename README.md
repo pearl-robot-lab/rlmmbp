@@ -13,10 +13,14 @@ The repository contains RL environments for the Tiago++ mobile manipulator robot
 
 ## Installation
 
-__Requirements:__ The NVIDIA ISAAC Sim simulator requires a GPU with RT (RayTracing) cores. This typically means an RTX GPU. The recommended specs are provided here: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/requirements.html\
+__Requirements:__ The NVIDIA ISAAC Sim simulator requires a GPU with RT (RayTracing) cores. This typically means an RTX GPU. The recommended specs are provided here: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/requirements.html
 
-- Install isaac-sim on your PC by following the procedure outlined here: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/install_basic.html\
-**Note:** This code was tested on isaac-sim **version 2022.1.0**
+- Install isaac-sim on your PC by following the procedure outlined here: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/install_workstation.html\
+**Note:** This code was tested on isaac-sim **version 2022.2.0**. 
+
+    Troubleshooting: (common error when starting up) https://forums.developer.nvidia.com/t/since-2022-version-error-failed-to-create-change-watch-no-space-left-on-device/218198
+
+
 - Follow the isaac-sim python conda environment installation at: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/install_python.html#advanced-running-with-anaconda\
 Note that we use a modified version of the isaac-sim conda environment `isaac-sim-lrp` which needs to be used instead and is available at `learned_robot_placement/environment.yml`. Don't forget to source the `setup_conda_env.sh` script in the isaac-sim directory before running experiments. (You could also add it to the .bashrc)
 - The code uses pinocchio [3] for inverse kinematics. The installation of pinoccio is known to be troublesome but the easiest way is to run `conda install pinocchio -c conda-forge` after activating the `isaac-sim-lrp ` conda environment.
@@ -32,7 +36,7 @@ Note that we use a modified version of the isaac-sim conda environment `isaac-si
     (This fork contains the implementation of **Boosted Hybrid Reinforcement Learning (BHyRL)** [1] https://github.com/iROSA-lab/mushroom-rl/blob/dev/mushroom_rl/algorithms/actor_critic/deep_actor_critic/bhyrl.py)
 - Finally, install this repository's python package:
     ```
-    cd learned_robot_placement
+    cd <this repository>
     pip install -e .
     ```
 
@@ -63,7 +67,7 @@ Note that we use a modified version of the isaac-sim conda environment `isaac-si
 ### Configuration and command line arguments
 
 - We use [Hydra](https://hydra.cc/docs/intro/) to manage the experiment configuration
-- Common arguments for the training scripts are: `task=TASK` (Selects which task to use) and `train=TRAIN` (Selects which training config to use).
+- Common arguments for the training scripts are: `task=<TASK>` (Selects which task to use) and `train=<TRAIN>` (Selects which training config to use).
 - You can check current configurations in the `/cfg` folder
 
 For more details about the code structure, have a look at the OmniIsaacGymEnvs docs: https://github.com/NVIDIA-Omniverse/OmniIsaacGymEnvs/tree/main/docs
@@ -84,4 +88,5 @@ To generate sampled reachability and base-placement maps for a mobile manipulato
 
 ## Troubleshooting
 
-- **"[Error] [omni.physx.plugin] PhysX error: PxRigidDynamic::setGlobalPose: pose is not valid."** This error can be **ignored** for now. Isaac-sim 2022.1.0 has some trouble handling the set_world_pose() function for RigidPrims, but this doesn't affect the experiments.
+- **"[Error] [omni.physx.plugin] PhysX error: PxRigidDynamic::setGlobalPose: pose is not valid."** This error can be **ignored** for now. Isaac-sim may have some trouble handling the set_world_pose() function for RigidPrims, but this doesn't affect the experiments.
+- **"[Error] no space left on device"** https://forums.developer.nvidia.com/t/since-2022-version-error-failed-to-create-change-watch-no-space-left-on-device/218198
