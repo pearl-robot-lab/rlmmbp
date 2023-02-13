@@ -37,7 +37,6 @@ from learned_robot_placement.tasks.utils.pinoc_utils import PinTiagoIKSolver # F
 # from omni.isaac.core.utils.prims import get_prim_at_path
 # from omni.isaac.core.utils.prims import create_prim
 # from omni.isaac.core.utils.stage import add_reference_to_stage
-from omni.kit.viewport.utility import get_viewport_from_window_name
 
 from omni.isaac.core.utils.torch.maths import torch_rand_float, tensor_clamp
 from omni.isaac.core.utils.torch.rotations import euler_angles_to_quats, quat_diff_rad
@@ -126,10 +125,11 @@ class TiagoDualReachingTask(RLTask):
         self._goal_vizs = GeometryPrimView(prim_paths_expr="/World/envs/.*/goal",name="goal_viz")
         scene.add(self._goal_vizs)
         # Optional viewport for rendering in a separate viewer
+        import omni.kit
         from omni.isaac.synthetic_utils import SyntheticDataHelper
-        self.viewport_api_window = get_viewport_from_window_name("Viewport")
+        self.viewport_window = omni.kit.viewport_legacy.get_default_viewport_window()
         self.sd_helper = SyntheticDataHelper()
-        self.sd_helper.initialize(sensor_names=["rgb"], viewport_api=self.viewport_api_window)
+        self.sd_helper.initialize(sensor_names=["rgb"], viewport=self.viewport_window)
 
     def post_reset(self):
         # reset that takes place when the isaac world is reset (typically happens only once)

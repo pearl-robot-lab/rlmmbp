@@ -11,7 +11,6 @@ params:
 
   config:
     name: ${resolve_default:${....train.name},${....experiment}}
-    full_experiment_name: ${.name}
     device: ${....rl_device}
     device_name: ${....rl_device}
     num_actors: ${....task.env.numEnvs}

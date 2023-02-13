@@ -34,12 +34,11 @@ from omni.isaac.core.objects.cone import VisualCone
 from omni.isaac.core.prims import GeometryPrimView
 from learned_robot_placement.tasks.utils.pinoc_utils import PinTiagoIKSolver # For IK
 from learned_robot_placement.tasks.utils import scene_utils
-# from omni.isaac.isaac_sensor import _isaac_sensor # TODO: Use new contact sensing API
+from omni.isaac.isaac_sensor import _isaac_sensor
 
 # from omni.isaac.core.utils.prims import get_prim_at_path
 # from omni.isaac.core.utils.prims import create_prim
 # from omni.isaac.core.utils.stage import add_reference_to_stage
-from omni.kit.viewport.utility import get_viewport_from_window_name
 
 from omni.isaac.core.utils.torch.maths import torch_rand_float, tensor_clamp
 from omni.isaac.core.utils.torch.rotations import euler_angles_to_quats, quat_diff_rad
@@ -82,8 +81,7 @@ class TiagoDualMultiObjFetchingTask(RLTask):
         self._grasp_objs = []
         self._grasp_objs_dimensions = []
         #  Contact sensor interface for collision detection:
-         # TODO: Use new contact sensing API
-        # self._contact_sensor_interface = _isaac_sensor.acquire_contact_sensor_interface()
+        self._contact_sensor_interface = _isaac_sensor.acquire_contact_sensor_interface()
 
         # Choose num_obs and num_actions based on task
         # 6D goal/target object grasp pose + 6D bbox for each obstacle in the room. All grasp objs except the target object will be used in obj state
@@ -165,9 +163,9 @@ class TiagoDualMultiObjFetchingTask(RLTask):
             self._grasp_objs_dimensions.append(scene.compute_object_AABB(grasp_obj.name)) # Axis aligned bounding box used as dimensions
         # Optional viewport for rendering in a separate viewer
         from omni.isaac.synthetic_utils import SyntheticDataHelper
-        self.viewport_api_window = get_viewport_from_window_name("Viewport")
+        self.viewport_window = omni.kit.viewport_legacy.get_default_viewport_window()
         self.sd_helper = SyntheticDataHelper()
-        self.sd_helper.initialize(sensor_names=["rgb"], viewport_api=self.viewport_api_window)        
+        self.sd_helper.initialize(sensor_names=["rgb"], viewport=self.viewport_window)
 
     def post_reset(self):
         # reset that takes place when the isaac world is reset (typically happens only once)
@@ -294,8 +292,6 @@ class TiagoDualMultiObjFetchingTask(RLTask):
 
 
     def check_robot_collisions(self):
-         # TODO: Use new contact sensing API
-
         # Check if the robot collided with an object
         # TODO: Parallelize
         for obst in self._obstacles:
@@ -322,8 +318,7 @@ class TiagoDualMultiObjFetchingTask(RLTask):
     def calculate_metrics(self) -> None:
         # assuming data from obs buffer is available (get_observations() called before this function)
 
-        # TODO: Use new contact sensing API
-        if(False):#self.check_robot_collisions()): # TODO: Parallelize
+        if(self.check_robot_collisions()): # TODO: Parallelize
             # Collision detected. Give penalty and no other rewards
             self._collided[0] = 1
             self._is_success[0] = 0 # Success isn't considered in this case

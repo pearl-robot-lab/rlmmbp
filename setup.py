@@ -10,7 +10,7 @@ import os
 
 # Minimum dependencies required prior to installation
 INSTALL_REQUIRES = [
-    "protobuf==3.20.2",
+    "protobuf==3.20.1",
     "omegaconf==2.1.1",
     "hydra-core==1.1.1",
 ]
@@ -19,7 +19,7 @@ INSTALL_REQUIRES = [
 setup(
     name="learned_robot_placement",
     author="Snehal Jauhri",
-    version="2022.2.0", # For isaac-sim 2022.2.0
+    version="1.0.0",
     description="RL environments for robot learning for the tiago robot in NVIDIA Isaac Sim. Adapted from omniisaacgymenvs (https://github.com/NVIDIA-Omniverse/OmniIsaacGymEnvs)",
     keywords=["robotics", "rl"],
     include_package_data=True,

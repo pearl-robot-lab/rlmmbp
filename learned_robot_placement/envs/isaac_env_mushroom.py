@@ -35,9 +35,9 @@ class IsaacEnvMushroom(Environment):
             headless (bool): Whether to run training headless.
             render (bool): Whether to run simulation rendering (if rendering using the ImageViewer or saving the renders).
         """
-        # TODO: Set isaac sim config from file (if provided)
-        # if sim_app_cfg_path: sim_app_cfg_path = os.path.dirname(learned_robot_placement.__file__) + sim_app_cfg_path
-        self._simulation_app = SimulationApp({#"experience": sim_app_cfg_path,
+        # Set isaac sim config file full path (if provided)
+        if sim_app_cfg_path: sim_app_cfg_path = os.path.dirname(learned_robot_placement.__file__) + sim_app_cfg_path
+        self._simulation_app = SimulationApp({"experience": sim_app_cfg_path,
                                               "headless": headless,
                                               "window_width": 1920,
                                               "window_height": 1080,
@@ -45,8 +45,7 @@ class IsaacEnvMushroom(Environment):
                                               "height": RENDER_HEIGHT})
         carb.settings.get_settings().set("/persistent/omnihydra/useSceneGraphInstancing", True)
         self._run_sim_rendering = ((not headless) or render) # tells the simulator to also perform rendering in addition to physics
-        self._render = self._run_sim_rendering
-
+        
         # Optional ImageViewer
         self._viewer = ImageViewer([RENDER_WIDTH, RENDER_HEIGHT], RENDER_DT)
         self.sim_frame_count = 0

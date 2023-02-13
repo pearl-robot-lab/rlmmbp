@@ -29,8 +29,8 @@
 
 from learned_robot_placement.utils.config_utils.default_scene_params import *
 import copy
+
 import omni.usd
-import carb
 
 class SimConfig():
     def __init__(self, config: dict = None):
@@ -43,14 +43,6 @@ class SimConfig():
         
         if self._config["test"] == True:
             self._sim_params["enable_scene_query_support"] = True
-
-        if self._config["headless"] == True and not self._sim_params["enable_cameras"]:
-            self._sim_params["use_flatcache"] = False
-            self._sim_params["enable_viewport"] = False
-
-        if self._sim_params["disable_contact_processing"]:
-            carb.settings.get_settings().set_bool("/physics/disableContactProcessing", True)
-
 
     def _parse_config(self):
         # general sim parameter
@@ -257,7 +249,6 @@ class SimConfig():
             physx_rb_api.GetRetainAccelerationsAttr().Set(True)
 
     def add_fixed_base(self, name, prim, cfg, value=None):
-        # add fixed root joint for rigid body
         from pxr import UsdPhysics, PhysxSchema
         stage = omni.usd.get_context().get_stage()
         if value is None:
@@ -362,15 +353,12 @@ class SimConfig():
         # check if is articulation
         prims = [prim]
         while len(prims) > 0:
-            prim_tmp = prims.pop(0)
-            articulation_api = UsdPhysics.ArticulationRootAPI.Get(stage, prim_tmp.GetPath())
-            physx_articulation_api = PhysxSchema.PhysxArticulationAPI.Get(stage, prim_tmp.GetPath())
+            prim = prims.pop(0)
+            articulation_api = UsdPhysics.ArticulationRootAPI.Get(stage, prim.GetPath())
+            physx_articulation_api = PhysxSchema.PhysxArticulationAPI.Get(stage, prim.GetPath())
 
             if articulation_api or physx_articulation_api:
                 is_articulation = True
-
-            children_prims = prim_tmp.GetPrim().GetChildren()
-            prims = prims + children_prims
 
         if not is_articulation and force_articulation:
             articulation_api = UsdPhysics.ArticulationRootAPI.Apply(prim)
@@ -379,28 +367,31 @@ class SimConfig():
         # parse through all children prims
         prims = [prim]
         while len(prims) > 0:
-            cur_prim = prims.pop(0)
-            rb = UsdPhysics.RigidBodyAPI.Get(stage, cur_prim.GetPath())
-            collision_body = UsdPhysics.CollisionAPI.Get(stage, cur_prim.GetPath())
-            articulation = UsdPhysics.ArticulationRootAPI.Get(stage, cur_prim.GetPath())
+            prim = prims.pop(0)
+            rb = UsdPhysics.RigidBodyAPI(prim)
+            collision_body = UsdPhysics.CollisionAPI(prim)
+            articulation = UsdPhysics.ArticulationRootAPI(prim)
             if rb:
-                self.apply_rigid_body_settings(name, cur_prim, cfg, is_articulation)
+                self.apply_rigid_body_settings(name, prim, cfg, is_articulation)
             if collision_body:
-                self.apply_rigid_shape_settings(name, cur_prim, cfg)
+                self.apply_rigid_shape_settings(name, prim, cfg)
 
             if articulation:
-                articulation_api = UsdPhysics.ArticulationRootAPI.Get(stage, cur_prim.GetPath())
-                physx_articulation_api = PhysxSchema.PhysxArticulationAPI.Get(stage, cur_prim.GetPath())
+                articulation_api = UsdPhysics.ArticulationRootAPI.Get(stage, prim.GetPath())
+                physx_articulation_api = PhysxSchema.PhysxArticulationAPI.Get(stage, prim.GetPath())
 
                 # enable self collisions
                 enable_self_collisions = physx_articulation_api.GetEnabledSelfCollisionsAttr()
                 if cfg["enable_self_collisions"] != -1:
                     enable_self_collisions.Set(cfg["enable_self_collisions"])
 
-                self.set_articulation_position_iteration(name, cur_prim, cfg["solver_position_iteration_count"])
-                self.set_articulation_velocity_iteration(name, cur_prim, cfg["solver_velocity_iteration_count"])
-                self.set_articulation_sleep_threshold(name, cur_prim, cfg["sleep_threshold"])
-                self.set_articulation_stabilization_threshold(name, cur_prim, cfg["stabilization_threshold"])
+                if not force_articulation:
+                    self.add_fixed_base(name, prim, cfg, cfg["fixed_base"])
 
-            children_prims = cur_prim.GetPrim().GetChildren()
+                self.set_articulation_position_iteration(name, prim, cfg["solver_position_iteration_count"])
+                self.set_articulation_velocity_iteration(name, prim, cfg["solver_velocity_iteration_count"])
+                self.set_articulation_sleep_threshold(name, prim, cfg["sleep_threshold"])
+                self.set_articulation_stabilization_threshold(name, prim, cfg["stabilization_threshold"])
+
+            children_prims = prim.GetPrim().GetChildren()
             prims = prims + children_prims
