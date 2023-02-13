@@ -23,7 +23,7 @@ __Requirements:__ The NVIDIA ISAAC Sim simulator requires a GPU with RT (RayTrac
 
 - Follow the isaac-sim python conda environment installation at: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/install_python.html#advanced-running-with-anaconda\
 Note that we use a modified version of the isaac-sim conda environment `isaac-sim-lrp` which needs to be used instead and is available at `learned_robot_placement/environment.yml`. Don't forget to source the `setup_conda_env.sh` script in the isaac-sim directory before running experiments. (You could also add it to the .bashrc)
-- The code uses pinocchio [3] for inverse kinematics. The installation of pinoccio is known to be troublesome but the easiest way is to run `conda install pinocchio -c conda-forge` after activating the `isaac-sim-lrp ` conda environment.
+- The code uses pinocchio [3] for inverse kinematics. The installation of pinoccio is known to be troublesome but the easiest way is to run `conda install pinocchio -c conda-forge` after activating the `isaac-sim-lrp ` conda environment. NOTE: If using pinocchio, disable isaac motion planning etc. because at the moment it is incompatible with pinocchio. Edit the file `isaac/ov/pkg/isaac_sim-2022.2.0/apps/omni.isaac.sim.python.kit` and comment out lines `541` to `548`.
 
 ### Setup RL algorithm and environments
 - For RL, we use the **mushroom-rl** library [4]. Install the iROSA fork of the mushroom-rl repository (https://github.com/iROSA-lab/mushroom-rl.git) within the conda environment:
