@@ -90,3 +90,7 @@ To generate sampled reachability and base-placement maps for a mobile manipulato
 
 - **"[Error] [omni.physx.plugin] PhysX error: PxRigidDynamic::setGlobalPose: pose is not valid."** This error can be **ignored** for now. Isaac-sim may have some trouble handling the set_world_pose() function for RigidPrims, but this doesn't affect the experiments.
 - **"[Error] no space left on device"** https://forums.developer.nvidia.com/t/since-2022-version-error-failed-to-create-change-watch-no-space-left-on-device/218198
+- When creating/saving USD files to be imported into the environment, set a default stage prim and save for it to be imported correctly
+- Use position targets with gains correctly set for PD control (see set_gains and set_position_tagrgets functions)
+- Use effort control for grasping for better results
+- For better physics, set materials as per issue: https://forums.developer.nvidia.com/t/physics-and-simulation-parameters-for-grasping-and-picking-tasks-objects-slipping-away/259716/3
